@@ -104,19 +104,18 @@ func translateLines(in_out []*extracting.DataLine, settings *TranslationSettings
 			leadingSpaces := utils.CountLeadingSpaces(part.Value)
 			finalSpaces := utils.CountFinalSpaces(part.Value)
 
-			isUpper := true
-			if len(trimmed) > 0 {
-				isUpper = utils.IsUpper([]rune(trimmed)[0])
-			}
+			isUpper := utils.IsUpper([]rune(trimmed)[0])
 
 			translated, err := translategooglefree.Translate(trimmed, settings.SourceLang, settings.TargetLang)
 			if err != nil {
 				panic(err)
 			}
 
+			runed := []rune(translated)
 			if isUpper {
-				runed := []rune(translated)
 				translated = strings.ToUpper(string(runed[0])) + string(runed[1:])
+			} else {
+				translated = strings.ToLower(string(runed[0])) + string(runed[1:])
 			}
 
 			part.Value = fmt.Sprintf("%s%s%s", strings.Repeat(" ", leadingSpaces), translated, strings.Repeat(" ", finalSpaces))

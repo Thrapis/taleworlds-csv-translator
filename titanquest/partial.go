@@ -27,9 +27,9 @@ func PartialStringString(ps *translating.PartialString) string {
 
 const (
 	TypeString = iota
+	TypeSpecialCurve
+	TypeSpecialSquare
 	TypeVariable
-	TypeGender
-	TypeTernary
 )
 
 func StringPartGetTypeString(sp *translating.StringPart) []*translating.StringPart {
@@ -37,11 +37,6 @@ func StringPartGetTypeString(sp *translating.StringPart) []*translating.StringPa
 
 	if sp.Type == TypeString {
 		result = append(result, sp)
-	} else if sp.Type == TypeGender {
-		result = append(result, sp.Parts...)
-	} else if sp.Type == TypeTernary {
-		result = append(result, StringPartGetTypeString(sp.Parts[1])...)
-		result = append(result, StringPartGetTypeString(sp.Parts[2])...)
 	}
 
 	return result
@@ -53,11 +48,11 @@ func StringPartString(sp *translating.StringPart) string {
 		fallthrough
 	case TypeString:
 		return sp.Value
-	case TypeVariable:
+	case TypeSpecialCurve:
 		return fmt.Sprintf("{%s}", sp.Value)
-	case TypeGender:
-		return fmt.Sprintf("{%v/%v}", sp.Parts[0], sp.Parts[1])
-	case TypeTernary:
-		return fmt.Sprintf("{%s?%v:%v}", sp.Parts[0].Value, sp.Parts[1], sp.Parts[2])
+	case TypeSpecialSquare:
+		return fmt.Sprintf("[%s]", sp.Value)
+	case TypeVariable:
+		return fmt.Sprintf("%s", sp.Value)
 	}
 }

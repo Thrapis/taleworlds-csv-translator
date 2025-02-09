@@ -6,81 +6,96 @@ import (
 	"tw-translator/translating"
 )
 
+const (
+	specialCurvePattern  = `\{([\^\%\.\:\+a-zA-Z0-9_ ]+)\}`
+	specialSquarePattern = `\[([\^\%\.\:\+a-zA-Z0-9_ ]+)\]`
+	variablePattern      = `(\%[a-zA-Z0-9_])`
+)
+
 func Analyse(text string) *translating.PartialString {
+	var (
+		specialCurveRegex  = regexp.MustCompile(specialCurvePattern)
+		specialSquareRegex = regexp.MustCompile(specialSquarePattern)
+		variableRegex      = regexp.MustCompile(variablePattern)
+	)
+
 	result := &translating.PartialString{
 		Parts: make([]*translating.StringPart, 0),
 	}
 
-	from := 0
-	openBrackets := 0
-	for i, char := range text {
-		if char == '{' {
-			if openBrackets == 0 {
-				if from != i {
-					result.Parts = append(result.Parts, DetectPart(text[from:i]))
-				}
-				from = i
-			}
-			openBrackets++
+	focusString := text
+
+	for {
+		if len(focusString) == 0 {
+			break
 		}
-		if char == '}' {
-			if openBrackets == 1 {
-				if from != i {
-					result.Parts = append(result.Parts, DetectPart(text[from:i+1]))
-				}
-				from = i + 1
-			}
-			openBrackets--
+
+		fistIndex := len(focusString)
+		lastIndex := len(focusString)
+
+		specialCurveIndeces := specialCurveRegex.FindStringIndex(focusString)
+		if specialCurveIndeces != nil && specialCurveIndeces[0] < fistIndex {
+			fistIndex, lastIndex = specialCurveIndeces[0], specialCurveIndeces[1]
 		}
-	}
-	if from <= len(text)-1 {
-		result.Parts = append(result.Parts, DetectPart(text[from:]))
+
+		specialSquareIndeces := specialSquareRegex.FindStringIndex(focusString)
+		if specialSquareIndeces != nil && specialSquareIndeces[0] < fistIndex {
+			fistIndex, lastIndex = specialSquareIndeces[0], specialSquareIndeces[1]
+		}
+
+		variableIndeces := variableRegex.FindStringIndex(focusString)
+		if variableIndeces != nil && variableIndeces[0] < fistIndex {
+			fistIndex, lastIndex = variableIndeces[0], variableIndeces[1]
+		}
+
+		if fistIndex == len(focusString) {
+			result.Parts = append(result.Parts, DetectPart(focusString))
+			break
+		}
+
+		before := focusString[:fistIndex]
+		target := focusString[fistIndex:lastIndex]
+		after := focusString[lastIndex:]
+
+		if len(before) > 0 {
+			result.Parts = append(result.Parts, DetectPart(before))
+		}
+
+		result.Parts = append(result.Parts, DetectPart(target))
+
+		if len(after) == 0 {
+			break
+		}
+		focusString = after
 	}
 
 	return result
 }
 
-const (
-	variablePattern = `^\{([a-zA-Z0-9_а-яА-ЯёЁ ]+)\}$`
-	genderPattern   = `^\{([a-zA-Z0-9_а-яА-ЯёЁ ]+)\/([a-zA-Z0-9_а-яА-ЯёЁ ]+)\}$`
-	ternaryPattern  = `^\{(\w+)\?(.*?)\:(.*?)\}$`
-)
-
 func DetectPart(text string) *translating.StringPart {
 	var (
-		variableRegex = regexp.MustCompile(variablePattern)
-		genderRegex   = regexp.MustCompile(genderPattern)
-		ternaryRegex  = regexp.MustCompile(ternaryPattern)
+		specialCurveRegex  = regexp.MustCompile(specialCurvePattern)
+		specialSquareRegex = regexp.MustCompile(specialSquarePattern)
+		variableRegex      = regexp.MustCompile(variablePattern)
 	)
 
-	if match := variableRegex.MatchString(text); match {
+	if match := specialCurveRegex.MatchString(text); match {
+		return &translating.StringPart{
+			Type:  TypeSpecialCurve,
+			Value: specialCurveRegex.FindStringSubmatch(text)[1],
+		}
+	} else if match := specialSquareRegex.MatchString(text); match {
+		return &translating.StringPart{
+			Type:  TypeSpecialSquare,
+			Value: specialSquareRegex.FindStringSubmatch(text)[1],
+		}
+	} else if match := variableRegex.MatchString(text); match {
 		return &translating.StringPart{
 			Type:  TypeVariable,
 			Value: variableRegex.FindStringSubmatch(text)[1],
 		}
-	} else if match := genderRegex.MatchString(text); match {
-		groups := genderRegex.FindStringSubmatch(text)
-		return &translating.StringPart{
-			Type: TypeGender,
-			Parts: []*translating.StringPart{
-				DetectPart(groups[1]),
-				DetectPart(groups[2]),
-			},
-		}
-	} else if match := ternaryRegex.MatchString(text); match {
-		groups := ternaryRegex.FindStringSubmatch(text)
-		return &translating.StringPart{
-			Type: TypeTernary,
-			Parts: []*translating.StringPart{
-				{
-					Type:  TypeVariable,
-					Value: groups[1],
-				},
-				DetectPart(groups[2]),
-				DetectPart(groups[3]),
-			},
-		}
 	}
+
 	return &translating.StringPart{
 		Type:  TypeString,
 		Value: text,
