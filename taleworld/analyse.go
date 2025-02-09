@@ -1,12 +1,14 @@
-package translating
+package taleworld
 
 import (
 	"regexp"
+
+	"tw-translator/translating"
 )
 
-func StringToPartial(text string) *PartialString {
-	result := &PartialString{
-		Parts: make([]*StringPart, 0),
+func Analyse(text string) *translating.PartialString {
+	result := &translating.PartialString{
+		Parts: make([]*translating.StringPart, 0),
 	}
 
 	from := 0
@@ -44,7 +46,7 @@ const (
 	ternaryPattern  = `^\{(\w+)\?(.*?)\:(.*?)\}$`
 )
 
-func DetectPart(text string) *StringPart {
+func DetectPart(text string) *translating.StringPart {
 	var (
 		variableRegex = regexp.MustCompile(variablePattern)
 		genderRegex   = regexp.MustCompile(genderPattern)
@@ -52,24 +54,24 @@ func DetectPart(text string) *StringPart {
 	)
 
 	if match := variableRegex.MatchString(text); match {
-		return &StringPart{
+		return &translating.StringPart{
 			Type:  TypeVariable,
 			Value: variableRegex.FindStringSubmatch(text)[1],
 		}
 	} else if match := genderRegex.MatchString(text); match {
 		groups := genderRegex.FindStringSubmatch(text)
-		return &StringPart{
+		return &translating.StringPart{
 			Type: TypeGender,
-			Parts: []*StringPart{
+			Parts: []*translating.StringPart{
 				DetectPart(groups[1]),
 				DetectPart(groups[2]),
 			},
 		}
 	} else if match := ternaryRegex.MatchString(text); match {
 		groups := ternaryRegex.FindStringSubmatch(text)
-		return &StringPart{
+		return &translating.StringPart{
 			Type: TypeTernary,
-			Parts: []*StringPart{
+			Parts: []*translating.StringPart{
 				{
 					Type:  TypeVariable,
 					Value: groups[1],
@@ -79,7 +81,7 @@ func DetectPart(text string) *StringPart {
 			},
 		}
 	}
-	return &StringPart{
+	return &translating.StringPart{
 		Type:  TypeString,
 		Value: text,
 	}

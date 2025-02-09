@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"tw-translator/extracting"
 	"tw-translator/utils"
 
 	translategooglefree "github.com/bas24/googletranslatefree"
-	"github.com/gocarina/gocsv"
 )
 
-func Translate(settings *TranslationSettings) {
+func StartTranslation(settings *TranslationSettings) {
 	folder := getFolder(settings.SourceFolder)
 
 	// folder.PrintDeep()
@@ -51,17 +51,34 @@ func translateFolder(sourceFolder *Folder, destinationFolder string, settings *T
 	}
 
 	for _, file := range sourceFolder.Files {
-		toWrite := translateFile(file.FullPath(), settings)
-
-		filePathToWrite := filepath.Join(destinationFolder, file.FullName)
-
-		realFile, err := os.OpenFile(filePathToWrite, os.O_RDWR|os.O_TRUNC|os.O_CREATE, os.ModePerm)
+		// file to read
+		readFile, err := os.OpenFile(file.FullPath(), os.O_RDONLY, os.ModePerm)
 		if err != nil {
 			panic(err)
 		}
-		defer realFile.Close()
+		defer readFile.Close()
 
-		realFile.Write([]byte(toWrite))
+		lines := []*extracting.DataLine{}
+
+		// extract lines
+		extractionSettings, err := extracting.Extract(readFile, &lines, settings.Delimeter)
+		if err != nil {
+			panic(err)
+		}
+
+		translateLines(lines, settings)
+
+		filePathToWrite := filepath.Join(destinationFolder, file.FullName)
+
+		// file to write
+		writeFile, err := os.OpenFile(filePathToWrite, os.O_RDWR|os.O_TRUNC|os.O_CREATE, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+		defer writeFile.Close()
+
+		// write lines
+		extracting.Compose(extractionSettings, writeFile, &lines, settings.Delimeter)
 	}
 
 	for _, folder := range sourceFolder.Folders {
@@ -73,23 +90,11 @@ func translateFolder(sourceFolder *Folder, destinationFolder string, settings *T
 	}
 }
 
-func translateFile(fullpath string, settings *TranslationSettings) string {
-	clientsFile, err := os.OpenFile(fullpath, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-	defer clientsFile.Close()
+func translateLines(in_out []*extracting.DataLine, settings *TranslationSettings) {
+	for i, line := range in_out {
+		partialString := settings.Analyse(line.Value)
 
-	lines := []*LocalCSV{}
-
-	if err := gocsv.UnmarshalWithoutHeaders(clientsFile, &lines); err != nil {
-		panic(err)
-	}
-
-	for i, line := range lines {
-		partialString := StringToPartial(line.Value)
-
-		for _, part := range partialString.GetTypeString() {
+		for _, part := range settings.PartialStringGetTypeString(partialString) {
 			trimmed := strings.TrimSpace(part.Value)
 
 			if len(trimmed) == 0 {
@@ -99,7 +104,7 @@ func translateFile(fullpath string, settings *TranslationSettings) string {
 			leadingSpaces := utils.CountLeadingSpaces(part.Value)
 			finalSpaces := utils.CountFinalSpaces(part.Value)
 
-			isUpper := false
+			isUpper := true
 			if len(trimmed) > 0 {
 				isUpper = utils.IsUpper([]rune(trimmed)[0])
 			}
@@ -117,15 +122,10 @@ func translateFile(fullpath string, settings *TranslationSettings) string {
 			part.Value = fmt.Sprintf("%s%s%s", strings.Repeat(" ", leadingSpaces), translated, strings.Repeat(" ", finalSpaces))
 		}
 
-		fmt.Printf("%d%% (%d of %d) - Translating: \"%.32s\" - \"%.32s\"\n", i*100/len(lines), i, len(lines), line.Value, partialString.String())
+		translatedValue := settings.PartialStringString(partialString)
 
-		lines[i].Value = partialString.String()
+		fmt.Printf("%d%% (%d of %d) - Translating: \"%.32s\" - \"%.32s\"\n", i*100/len(in_out), i, len(in_out), line.Value, translatedValue)
+
+		in_out[i].Value = translatedValue
 	}
-
-	csvContent, err := gocsv.MarshalStringWithoutHeaders(&lines)
-	if err != nil {
-		panic(err)
-	}
-
-	return csvContent
 }
