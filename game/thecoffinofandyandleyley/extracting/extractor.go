@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 
+	"tw-translator/extracting"
+
 	"golang.org/x/net/html/charset"
 )
 
@@ -13,13 +15,14 @@ const (
 	lf   = "\n"
 )
 
-func Extract(in io.Reader, out *[]*DataLine, delimeter string) (*Settings, error) {
+func Extract(in io.Reader, out *[]*extracting.DataLine, delimeter string) (*extracting.Settings, error) {
 	bytes, err := io.ReadAll(in)
 	if err != nil {
 		return nil, err
 	}
 
-	enc, _, _ := charset.DetermineEncoding(bytes, "")
+	// enc, _, _ := charset.DetermineEncoding(bytes, "")
+	enc, _ := charset.Lookup("utf8")
 
 	utf8Bytes, err := enc.NewDecoder().Bytes(bytes)
 	if err != nil {
@@ -33,27 +36,29 @@ func Extract(in io.Reader, out *[]*DataLine, delimeter string) (*Settings, error
 		lineDelimeter = crfl
 	}
 
-	settings := &Settings{
+	settings := &extracting.Settings{
 		Encoding:      enc,
 		LineDelimeter: lineDelimeter,
 	}
 
 	lines := strings.Split(text, lineDelimeter)
 
-	*out = make([]*DataLine, 0)
+	*out = make([]*extracting.DataLine, 0)
 
 	for _, line := range lines {
-		if before, after, ok := strings.Cut(line, delimeter); ok {
-			*out = append(*out, &DataLine{
-				Key:   before,
-				Value: after,
+		values := strings.SplitN(line, delimeter, 4)
+		if len(values) > 3 {
+			*out = append(*out, &extracting.DataLine{
+				Key:   fmt.Sprintf("%s,%s,%s", values[0], values[1], values[2]),
+				Value: values[2],
+				Tag:   fmt.Sprintf("%s,%s", values[0], values[1]),
 			})
 		}
 	}
 	return settings, nil
 }
 
-func Compose(settings *Settings, out io.Writer, in *[]*DataLine, delimeter string) error {
+func Compose(settings *extracting.Settings, out io.Writer, in *[]*extracting.DataLine, delimeter string) error {
 	text := strings.Builder{}
 
 	for _, dataLine := range *in {

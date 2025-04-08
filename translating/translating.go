@@ -61,9 +61,13 @@ func translateFolder(sourceFolder *Folder, destinationFolder string, settings *T
 		lines := []*extracting.DataLine{}
 
 		// extract lines
-		extractionSettings, err := extracting.Extract(readFile, &lines, settings.Delimeter)
+		extractionSettings, err := settings.Exract(readFile, &lines, settings.Delimeter)
 		if err != nil {
 			panic(err)
+		}
+
+		if settings.SkipFirstLine {
+			lines = lines[1:]
 		}
 
 		translateLines(lines, settings)
@@ -78,7 +82,7 @@ func translateFolder(sourceFolder *Folder, destinationFolder string, settings *T
 		defer writeFile.Close()
 
 		// write lines
-		extracting.Compose(extractionSettings, writeFile, &lines, settings.Delimeter)
+		settings.Compose(extractionSettings, writeFile, &lines, settings.Delimeter)
 	}
 
 	for _, folder := range sourceFolder.Folders {
